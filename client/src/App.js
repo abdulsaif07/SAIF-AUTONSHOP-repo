@@ -109,7 +109,7 @@ function App() {
     setQuery(searchTerm);
 
     try {
-      const res = await axios.get(`http://localhost:5000/api/search?q=${searchTerm}`);
+      const res = await axios.get(`https://autonshop-api.onrender/api/search?q=${searchTerm}`);
       setProducts(res.data);
     } catch (err) {
       console.error(err);
@@ -120,7 +120,7 @@ function App() {
 
   const fetchHistory = async () => {
       try {
-          const res = await axios.get('http://localhost:5000/api/history');
+          const res = await axios.get('https://autonshop-api.onrender/api/history');
           setHistory(res.data);
           setView('history');
       } catch (err) { console.error(err); }
