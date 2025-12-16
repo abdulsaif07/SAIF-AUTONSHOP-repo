@@ -2,63 +2,26 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
-import { Search, ExternalLink, Loader, Clock, ArrowLeft, Camera, Zap, TrendingUp, ShieldCheck, BarChart3, Moon, Sun } from 'lucide-react'; 
+import { Search, ExternalLink, Loader, Clock, ArrowLeft, Camera, Zap, TrendingUp, ShieldCheck, BarChart3, Moon, Sun, Link as LinkIcon } from 'lucide-react'; 
 import './App.css';
 
-// AI Tools
 import '@tensorflow/tfjs';
 import * as mobilenet from '@tensorflow-models/mobilenet';
 
 // --- DATA: STABLE AMAZON IMAGES ---
 const ALL_TRENDING_PRODUCTS = [
   // TECH
-  { 
-    title: "iPhone 15 Pro", 
-    image: "https://m.media-amazon.com/images/I/81SigpJN1KL._AC_SL1500_.jpg", 
-    price: "₹1,34,900", tag: "Hot Tech", query: "iPhone 15 Pro" 
-  },
-  { 
-    title: "PlayStation 5", 
-    image: "https://m.media-amazon.com/images/I/51051FiD9UL._SL1000_.jpg", 
-    price: "₹44,990", tag: "Gamer's Pick", query: "PlayStation 5 Console" 
-  },
-  { 
-    title: "Samsung S24 Ultra", 
-    image: "https://m.media-amazon.com/images/I/81vxWpPpgNL._AC_SL1500_.jpg", 
-    price: "₹1,29,999", tag: "Android King", query: "Samsung Galaxy S24 Ultra" 
-  },
-  { 
-    title: "MacBook Air M2", 
-    image: "https://m.media-amazon.com/images/I/719C6bJv8jL._AC_SL1500_.jpg", 
-    price: "₹99,900", tag: "Student Fav", query: "Apple MacBook Air M2" 
-  },
-  { 
-    title: "Sony WH-1000XM5", 
-    image: "https://m.media-amazon.com/images/I/51SKmu2G9FL._AC_SL1000_.jpg", 
-    price: "₹26,990", tag: "Best Audio", query: "Sony WH-1000XM5 Headphones" 
-  },
-  { 
-    title: "Apple Watch S9", 
-    image: "https://m.media-amazon.com/images/I/71XMTLtZd5L._AC_SL1500_.jpg", 
-    price: "₹41,900", tag: "Wearable", query: "Apple Watch Series 9" 
-  },
+  { title: "iPhone 15 Pro", image: "https://m.media-amazon.com/images/I/81SigpJN1KL._AC_SL1500_.jpg", price: "₹1,34,900", tag: "Hot Tech", query: "iPhone 15 Pro" },
+  { title: "PlayStation 5", image: "https://m.media-amazon.com/images/I/51051FiD9UL._SL1000_.jpg", price: "₹44,990", tag: "Gamer's Pick", query: "PlayStation 5 Console" },
+  { title: "Samsung S24 Ultra", image: "https://m.media-amazon.com/images/I/81vxWpPpgNL._AC_SL1500_.jpg", price: "₹1,29,999", tag: "Android King", query: "Samsung Galaxy S24 Ultra" },
+  { title: "MacBook Air M2", image: "https://m.media-amazon.com/images/I/719C6bJv8jL._AC_SL1500_.jpg", price: "₹99,900", tag: "Student Fav", query: "Apple MacBook Air M2" },
+  { title: "Sony WH-1000XM5", image: "https://m.media-amazon.com/images/I/51SKmu2G9FL._AC_SL1000_.jpg", price: "₹26,990", tag: "Best Audio", query: "Sony WH-1000XM5 Headphones" },
+  { title: "Apple Watch S9", image: "https://m.media-amazon.com/images/I/71XMTLtZd5L._AC_SL1500_.jpg", price: "₹41,900", tag: "Wearable", query: "Apple Watch Series 9" },
   
   // LIFESTYLE
-  { 
-    title: "Nike Air Jordan", 
-    image: "https://m.media-amazon.com/images/I/71C8F0qy8gL._AC_UY1000_.jpg", 
-    price: "₹11,995", tag: "Streetwear", query: "Nike Air Jordan 1 High" 
-  },
-  { 
-    title: "Canon EOS R5", 
-    image: "https://m.media-amazon.com/images/I/71M5b8l+bBL._AC_SL1500_.jpg", 
-    price: "₹3,39,995", tag: "Photography", query: "Canon EOS R5 Camera" 
-  },
-  { 
-    title: "Xbox Series X", 
-    image: "https://m.media-amazon.com/images/I/61-jjE67uqL._SL1500_.jpg", 
-    price: "₹49,990", tag: "Console", query: "Xbox Series X Console" 
-  }
+  { title: "Nike Air Jordan", image: "https://m.media-amazon.com/images/I/71C8F0qy8gL._AC_UY1000_.jpg", price: "₹11,995", tag: "Streetwear", query: "Nike Air Jordan 1 High" },
+  { title: "Canon EOS R5", image: "https://m.media-amazon.com/images/I/71M5b8l+bBL._AC_SL1500_.jpg", price: "₹3,39,995", tag: "Photography", query: "Canon EOS R5 Camera" },
+  { title: "Xbox Series X", image: "https://m.media-amazon.com/images/I/61-jjE67uqL._SL1500_.jpg", price: "₹49,990", tag: "Console", query: "Xbox Series X Console" }
 ];
 
 const CATEGORIES = [
@@ -80,8 +43,6 @@ function App() {
   const [view, setView] = useState('home'); 
   const [model, setModel] = useState(null);
   const [dailyDeals, setDailyDeals] = useState([]);
-  
-  // DARK MODE STATE
   const [darkMode, setDarkMode] = useState(false);
   
   const fileInputRef = useRef(null);
@@ -109,18 +70,18 @@ function App() {
     setQuery(searchTerm);
 
     try {
-      const res = await axios.get(`https://autonshop-api.onrender/api/search?q=${searchTerm}`);
+      const res = await axios.get(`http://localhost:5000/api/search?q=${encodeURIComponent(searchTerm)}`);
       setProducts(res.data);
     } catch (err) {
       console.error(err);
-      alert("Error fetching data. Check server console.");
+      alert("Error fetching data. Is the local server running?");
     }
     setLoading(false);
   };
 
   const fetchHistory = async () => {
       try {
-          const res = await axios.get('https://autonshop-api.onrender/api/history');
+          const res = await axios.get('http://localhost:5000/api/history');
           setHistory(res.data);
           setView('history');
       } catch (err) { console.error(err); }
@@ -135,7 +96,9 @@ function App() {
         img.onload = async () => {
             const predictions = await model.classify(img);
             if (predictions?.length > 0) {
-                const bestGuess = predictions[0].className.split(',')[0];
+                let bestGuess = predictions[0].className.split(',')[0];
+                if (bestGuess.includes("iPod") || bestGuess.includes("cellular")) bestGuess = "Smartphone";
+                if (bestGuess.includes("running shoe")) bestGuess = "Nike Running Shoes";
                 setQuery(bestGuess);
                 setAnalyzing(false);
                 searchProducts(bestGuess);
@@ -144,23 +107,47 @@ function App() {
     }
   };
 
+  // --- NEW HELPER: Get Color & Label for Stores ---
+  const getStoreStyle = (sourceName) => {
+    const name = sourceName ? sourceName.toLowerCase() : "";
+    if (name.includes('amazon')) return { bg: '#232f3e', label: 'Amz' };
+    if (name.includes('flipkart')) return { bg: '#2874f0', label: 'Flip' };
+    if (name.includes('croma')) return { bg: '#00b5b5', label: 'Croma' };
+    if (name.includes('ajio')) return { bg: '#2c4152', label: 'Ajio' };
+    if (name.includes('reliance')) return { bg: '#e42529', label: 'Rel' };
+    if (name.includes('tata')) return { bg: '#5f259f', label: 'Tata' };
+    return { bg: '#666', label: 'Store' }; // Default gray for unknown stores
+  };
+
+  // --- NEW LOGIC: Find a Real Alternative Product ---
+  const getAlternativeProduct = () => {
+    if (!selectedProduct || products.length < 2) return null;
+    // Find the first product that is NOT from the same store as the selected one
+    const alt = products.find(p => p.source !== selectedProduct.source);
+    
+    // If found, return it. If not, create a generic "Retail" placeholder
+    return alt || {
+        source: "Local Retail",
+        raw_price: selectedProduct.raw_price * 1.15, // 15% more expensive mock
+        price: "₹" + (selectedProduct.raw_price * 1.15).toFixed(0),
+        link: "#"
+    };
+  };
+
+  const altProduct = getAlternativeProduct();
+
   return (
-    // We add 'dark-mode' class to the main container if state is true
     <div className={`app-container ${darkMode ? 'dark-mode' : ''}`}>
-      
       <header className="navbar">
         <div className="logo" onClick={() => {setView('home'); setProducts([]); setQuery(""); }}>
             <span className="logo-text">Autonshop</span>
         </div>
-        
         <div className="nav-group-right">
             <div className="nav-links">
                 <span onClick={() => {setView('home'); setProducts([]); setQuery(""); }}>Deals</span>
                 <span onClick={() => setView('categories')}>Categories</span>
                 <span onClick={fetchHistory}>History</span>
             </div>
-            
-            {/* DARK MODE TOGGLE BUTTON */}
             <button className="theme-toggle" onClick={() => setDarkMode(!darkMode)}>
                 {darkMode ? <Sun size={20} color="#FF6B00"/> : <Moon size={20} />}
             </button>
@@ -169,16 +156,19 @@ function App() {
 
       <div className="search-section">
         <div className="search-bar-container">
-            <Search className="search-icon" size={20}/>
+            {query.includes('http') ? <LinkIcon className="search-icon" size={20} color="#2563EB"/> : <Search className="search-icon" size={20}/>}
+            
             <input 
               type="text" 
-              placeholder={analyzing ? "AI is looking..." : "Search for products (e.g. PS5, iPhone)..."}
+              placeholder={analyzing ? "AI is looking..." : "Search product or paste a link..."}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyPress={(e) => e.key === 'Enter' && searchProducts()}
             />
+            
             <input type="file" ref={fileInputRef} style={{display: 'none'}} accept="image/*" onChange={handleImageUpload} />
             {analyzing ? <Zap className="spin camera-icon" color="#FF6B00" /> : <Camera className="camera-icon" size={20} onClick={() => fileInputRef.current.click()} />}
+            
             <button onClick={() => searchProducts()} className="search-btn">
                 {loading ? <Loader className="spin" size={18}/> : "Search"}
             </button>
@@ -197,12 +187,7 @@ function App() {
                     {dailyDeals.map((deal, idx) => (
                         <div key={idx} className="trend-card" onClick={() => searchProducts(deal.query)}>
                             <div className="trend-tag">{deal.tag}</div>
-                            <img 
-                                src={deal.image} 
-                                alt={deal.title} 
-                                className="trend-img"
-                                onError={handleImageError} 
-                            />
+                            <img src={deal.image} alt={deal.title} className="trend-img" onError={handleImageError} />
                             <h3>{deal.title}</h3>
                             <div className="price-row">
                                 <span className="price">{deal.price}</span>
@@ -245,7 +230,7 @@ function App() {
                     {history.map((item, idx) => (
                         <div key={idx} className="product-card" onClick={() => searchProducts(item.term)}>
                             <div className="info">
-                                <p className="date-text">{new Date(item.searchDate).toLocaleDateString()}</p>
+                                <p style={{color: '#999', fontSize: '12px'}}>{new Date(item.searchDate).toLocaleDateString()}</p>
                                 <h3>{item.term}</h3><span className="price">{item.topResult.price}</span>
                             </div>
                         </div>
@@ -261,9 +246,7 @@ function App() {
                 {products.length === 0 && !loading && <div className="placeholder"><h2>No results found</h2></div>}
                 {products.map((item, index) => (
                     <div key={index} className={`product-card ${selectedProduct === item ? 'active' : ''}`} onClick={() => setSelectedProduct(item)}>
-                        <div className="card-image">
-                            <img src={item.image} alt={item.title} onError={handleImageError} />
-                        </div>
+                        <div className="card-image"><img src={item.image} alt={item.title} onError={handleImageError} /></div>
                         <div className="info">
                             <h3>{item.title}</h3>
                             <p className="desc-text">{item.source}</p>
@@ -293,17 +276,47 @@ function App() {
                     </div>
                     <div className="comparison-section">
                         <h3>Live Price Comparison</h3>
+                        
+                        {/* 1. BEST OPTION (The one you clicked) */}
                         <div className="compare-card best-option">
-                            <div className="store-info"><div className="store-logo amazon">Amz</div><div><span className="store-name">Amazon</span><div className="lowest-label">Lowest Price</div></div></div>
+                            <div className="store-info">
+                                {/* Dynamic Logo Color */}
+                                <div className="store-logo" style={{backgroundColor: getStoreStyle(selectedProduct.source).bg}}>
+                                    {getStoreStyle(selectedProduct.source).label}
+                                </div>
+                                <div>
+                                    <span className="store-name">{selectedProduct.source || "Best Store"}</span>
+                                    <div className="lowest-label">Lowest Price</div>
+                                </div>
+                            </div>
                             <div className="price-action">
                                 <span className="price-bold">{selectedProduct.price}</span>
                                 <a href={selectedProduct.link} target="_blank" rel="noreferrer" className="buy-btn-small">Buy <ExternalLink size={12}/></a>
                             </div>
                         </div>
-                         <div className="compare-card">
-                            <div className="store-info"><div className="store-logo flipkart">Flip</div><div><span className="store-name">Flipkart</span><div className="diff-label">Alternative</div></div></div>
-                            <div className="price-action"><span className="price-bold">₹{(selectedProduct.raw_price * 1.02).toFixed(0)}</span><button className="view-btn-small">View</button></div>
-                        </div>
+
+                        {/* 2. ALTERNATIVE OPTION (Real competitor from the list) */}
+                        {altProduct && (
+                            <div className="compare-card">
+                                <div className="store-info">
+                                    <div className="store-logo" style={{backgroundColor: getStoreStyle(altProduct.source).bg}}>
+                                        {getStoreStyle(altProduct.source).label}
+                                    </div>
+                                    <div>
+                                        <span className="store-name">{altProduct.source || "Alternative"}</span>
+                                        <div className="diff-label">Check Price</div>
+                                    </div>
+                                </div>
+                                <div className="price-action">
+                                    <span className="price-bold">{altProduct.price}</span>
+                                    {altProduct.link !== "#" ? (
+                                        <a href={altProduct.link} target="_blank" rel="noreferrer" className="view-btn-small" style={{textDecoration:'none', fontSize:'13px', display:'flex', alignItems:'center'}}>View</a>
+                                    ) : (
+                                        <button className="view-btn-small">View</button>
+                                    )}
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
                 )}

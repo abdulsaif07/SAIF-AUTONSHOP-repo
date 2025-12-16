@@ -19,10 +19,10 @@ app.use(express.json());
 
 // --- CONFIGURATION ---
 
-// 1. YOUR API KEY (Paste it here)
+// 1. SAIF API KEY 
 const API_KEY = "5e6031d7c06842b2fdfe4e29747ee8e2de5f09a8f0bd3eef2d114fa4807b8cd8"; 
 
-// 2. YOUR MONGODB CONNECTION
+// 2. SAIF MONGODB CONNECTION
 const DB_URI ="mongodb+srv://rexop_db_user:LtnbxRtflO2ZF7i3@cluster0.gwvcq2y.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0";
 
 // --- DATABASE CONNECTION ---
@@ -41,15 +41,34 @@ const generateHistory = (currentPrice) => {
   return history;
 };
 
-// --- SEARCH ROUTE (Updated to use AXIOS) ---
+// --- SMART LINK CLEANER ---
+function extractProductFromUrl(input) {
+    if (!input.includes('http') && !input.includes('www.')) return input;
+    try {
+        const url = new URL(input.startsWith('http') ? input : `https://${input}`);
+        const path = url.pathname;
+        if (url.hostname.includes('amazon')) {
+            const segments = path.split('/');
+            const dpIndex = segments.indexOf('dp');
+            if (dpIndex > 0) return segments[dpIndex - 1].replace(/-/g, ' ');
+        }
+        if (url.hostname.includes('flipkart')) {
+            const segments = path.split('/');
+            if (segments.length > 1) return segments[1].replace(/-/g, ' ');
+        }
+        return input;
+    } catch (e) { return input; }
+}
+
+// --- SEARCH ROUTE ---
 app.get('/api/search', async (req, res) => {
-  const query = req.query.q;
+  let query = req.query.q;
   if (!query) return res.status(400).json({ error: "Missing query" });
 
+  query = extractProductFromUrl(query);
   console.log(`🔎 Searching for: ${query}...`);
 
   try {
-    // We use AXIOS directly to prevent timeouts from crashing the server
     const response = await axios.get('https://serpapi.com/search.json', {
         params: {
             engine: "google_shopping",
@@ -62,55 +81,56 @@ app.get('/api/search', async (req, res) => {
     });
 
     const json = response.data;
-
-    if (!json.shopping_results) {
-        return res.status(500).json({ error: "No results found" });
-    }
+    if (!json.shopping_results) return res.status(500).json({ error: "No results found" });
 
     const products = json.shopping_results.map(item => {
       const currentPrice = item.price ? parseFloat(item.price.replace(/[^0-9.]/g, '')) : 0;
       let dealRating = "Fair Price";
       if (item.extracted_price < item.old_price) dealRating = "Great Deal";
 
-      const bestLink = item.link || item.product_link;
+      // --- NEW LINK LOGIC ---
+      // 1. Try to get the direct link if SerpApi parsed it
+      // 2. Otherwise use the standard link (which is a redirect to the store)
+      // 3. Fallback to the 'inline' link if available
+      // 4. AVOID 'product_link' unless it's the only option (that's the Google page)
+      let bestLink = item.direct_link || item.link;
+
+      // If the link looks like a Google Shopping page (starts with /shopping/product), try to find a seller link
+      if (!bestLink || bestLink.includes("google.com/shopping/product")) {
+         if(item.inline_shopping_results && item.inline_shopping_results.length > 0) {
+             bestLink = item.inline_shopping_results[0].link;
+         } else {
+             // Last resort
+             bestLink = item.link || item.product_link;
+         }
+      }
 
       return {
         title: item.title,
         price: item.price,
         raw_price: currentPrice,
         image: item.thumbnail,
-        link: bestLink, // <--- This uses the backup if needed!
+        link: bestLink, 
         source: item.source,
         deal_rating: dealRating,
         history: generateHistory(currentPrice)
       };
     });
-    
-    // Save to History (if model exists)
+
     if (SearchHistory && products.length > 0) {
-        const bestItem = products[0];
         try {
             await SearchHistory.create({
                 term: query,
-                topResult: {
-                    title: bestItem.title,
-                    price: bestItem.price,
-                    image: bestItem.image,
-                    source: bestItem.source
-                }
+                topResult: { title: products[0].title, price: products[0].price, image: products[0].image, source: products[0].source }
             });
-            console.log("💾 Saved to History");
-        } catch (e) {
-            console.log("Warning: Could not save history:", e.message);
-        }
+        } catch (e) { console.log("History Error"); }
     }
 
     res.json(products);
 
   } catch (error) {
-    // This catches the timeout WITHOUT crashing the server
     console.error("❌ Search Error:", error.message);
-    res.status(500).json({ error: "Search failed or timed out. Please try again." });
+    res.status(500).json({ error: "Search failed." });
   }
 });
 
@@ -118,16 +138,11 @@ app.get('/api/search', async (req, res) => {
 app.get('/api/history', async (req, res) => {
     try {
         if (!SearchHistory) return res.json([]);
-        console.log("📖 Fetching history...");
         const history = await SearchHistory.find().sort({ searchDate: -1 }).limit(10);
         res.json(history);
-    } catch (err) {
-        console.error("❌ HISTORY ERROR:", err);
-        res.status(500).json({ error: err.message });
-    }
+    } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// --- START SERVER ---
 const PORT = 5000;
 app.listen(PORT, () => {
   console.log(`🚀 Server started on port ${PORT}`);
