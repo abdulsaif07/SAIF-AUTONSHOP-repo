@@ -88,8 +88,8 @@ app.get('/api/search', async (req, res) => {
       let dealRating = "Fair Price";
       if (item.extracted_price < item.old_price) dealRating = "Great Deal";
 
-      // --- NEW LINK LOGIC ---
-      // 1. Try to get the direct link if SerpApi parsed it
+      // --- NEW LINK SEARCH LOGIC ---
+      // 1. the direct link if SerpApi parsed it
       // 2. Otherwise use the standard link (which is a redirect to the store)
       // 3. Fallback to the 'inline' link if available
       // 4. AVOID 'product_link' unless it's the only option (that's the Google page)
