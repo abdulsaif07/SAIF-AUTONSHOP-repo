@@ -20,10 +20,10 @@ app.use(express.json());
 // --- CONFIGURATION ---
 
 // 1. SAIF API KEY 
-const API_KEY = "5e6031d7c06842b2fdfe4e29747ee8e2de5f09a8f0bd3eef2d114fa4807b8cd8"; 
+const API_KEY = "your_real_serpapi_key_here"; 
 
 // 2. SAIF MONGODB CONNECTION
-const DB_URI ="mongodb+srv://rexop_db_user:LtnbxRtflO2ZF7i3@cluster0.gwvcq2y.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0";
+const DB_URI ="your_real_mongodb_connection_string_here";
 
 // --- DATABASE CONNECTION ---
 mongoose.connect(DB_URI)
