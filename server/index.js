@@ -11,6 +11,18 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+const searchCache = new Map();
+
+// Helper to check cache
+const getFromCache = (key) => {
+  const cached = searchCache.get(key);
+  if (cached && (Date.now() - cached.timestamp < CACHE_DURATION)) {
+    return cached.data;
+  }
+  return null;
+};
+
 // --- ROUTES ---
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/alerts', require('./routes/alerts'));
@@ -56,13 +68,20 @@ function extractProductFromUrl(input) {
 
 // --- SEARCH ROUTE ---
 app.get('/api/search', async (req, res) => {
-  let query = req.query.q;
-  if (!query) return res.status(400).json({ error: "Missing query" });
-
-  query = extractProductFromUrl(query);
-  console.log(`🔎 Searching for: ${query}...`);
-
   try {
+    let query = req.query.q;
+    if (!query) return res.status(400).json({ error: "Missing query parameter 'q'" });
+
+    query = extractProductFromUrl(query);
+
+    const cachedData = getFromCache(query.toLowerCase());
+    if (cachedData) {
+      console.log(`⚡ Serving from cache: ${query}`);
+      return res.json(cachedData);
+    }
+
+    console.log(`🔎 Searching for: ${query}...`);
+
     const response = await axios.get('https://serpapi.com/search.json', {
         params: {
             engine: "google_shopping",
@@ -100,11 +119,23 @@ app.get('/api/search', async (req, res) => {
         link: bestLink, 
         source: item.source,
         deal_rating: dealRating,
-        history: generateHistory(currentPrice)
+        history: generateHistory(currentPrice),
+        description: item.snippet || "",
+        specs: item.extensions || [],
+        rating: item.rating || null,
+        reviews: item.reviews || null
       };
     });
 
-    res.json(products);
+    const sorted = products.sort((a, b) => a.raw_price - b.raw_price);
+    
+    // Save to cache
+    searchCache.set(query.toLowerCase(), {
+      timestamp: Date.now(),
+      data: sorted
+    });
+
+    res.json(sorted);
   } catch (error) {
     console.error("❌ Search Error:", error.message);
     res.status(500).json({ error: "Search failed." });

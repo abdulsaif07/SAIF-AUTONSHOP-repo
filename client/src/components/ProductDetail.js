@@ -1,16 +1,21 @@
 import React, { useState } from 'react';
 import { ExternalLink, Share2 } from 'lucide-react';
+import { useToast } from './Toast';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
 const ProductDetail = ({ selectedProduct, getAlternativeProduct, getStoreStyle }) => {
   const [copied, setCopied] = useState(false);
+  const { addToast, ToastContainer } = useToast();
   const altProduct = getAlternativeProduct();
 
   if (!selectedProduct) return null;
 
+  const style = getStoreStyle(selectedProduct.source);
+
   const handleShare = () => {
     const url = window.location.origin + '/results?q=' + encodeURIComponent(selectedProduct.title);
     navigator.clipboard.writeText(url);
+    addToast('Link copied to clipboard!');
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -28,6 +33,11 @@ const ProductDetail = ({ selectedProduct, getAlternativeProduct, getStoreStyle }
     <div className="detail-view">
       <div className="detail-header">
         <h2>{selectedProduct.title}</h2>
+        {selectedProduct.rating && (
+          <div className="rating-badge" style={{display: 'flex', alignItems: 'center', gap: '5px', marginTop: '8px', color: '#F59E0B', fontWeight: 600}}>
+            ⭐ {selectedProduct.rating} <span style={{color: 'var(--gray)', fontSize: '13px'}}>({selectedProduct.reviews} reviews)</span>
+          </div>
+        )}
         <div className="main-price-block">
           <h1>{selectedProduct.price}</h1>
           <span className="badge fair-price-large">{selectedProduct.deal_rating}</span>
@@ -41,6 +51,24 @@ const ProductDetail = ({ selectedProduct, getAlternativeProduct, getStoreStyle }
           </button>
         </div>
       </div>
+      
+      {(selectedProduct.description || (selectedProduct.specs && selectedProduct.specs.length > 0)) && (
+        <div className="product-info-section" style={{marginTop: '30px', padding: '25px', background: 'var(--input-bg)', borderRadius: '20px', border: '1px solid var(--border-color)'}}>
+          <h3 style={{marginTop: 0, fontSize: '18px'}}>About this item</h3>
+          {selectedProduct.description && (
+            <p style={{color: 'var(--gray)', lineHeight: 1.6, fontSize: '14px', marginBottom: '20px'}}>{selectedProduct.description}</p>
+          )}
+          {selectedProduct.specs && selectedProduct.specs.length > 0 && (
+            <div className="specs-grid" style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px'}}>
+              {selectedProduct.specs.map((spec, i) => (
+                <div key={i} style={{background: 'var(--card-bg)', padding: '10px 15px', borderRadius: '10px', fontSize: '13px', fontWeight: 600, color: 'var(--text)', border: '1px solid var(--border-color)'}}>
+                  {spec}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
       
       <div className="chart-container">
         <h3>30-Day Price History</h3>
@@ -107,6 +135,7 @@ const ProductDetail = ({ selectedProduct, getAlternativeProduct, getStoreStyle }
           </div>
         )}
       </div>
+      <ToastContainer />
     </div>
   );
 };

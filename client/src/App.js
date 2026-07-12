@@ -1,8 +1,7 @@
 // client/src/App.js
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, Suspense, lazy } from 'react';
 import axios from 'axios';
 import { BrowserRouter as Router, Routes, Route, useNavigate } from 'react-router-dom';
-import { TrendingUp, ShieldCheck, BarChart3 } from 'lucide-react';
 import * as mobilenet from '@tensorflow-models/mobilenet';
 import '@tensorflow/tfjs';
 
@@ -11,15 +10,22 @@ import Navbar from './components/Navbar';
 import SearchBar from './components/SearchBar';
 import ProductCard from './components/ProductCard';
 import ProductDetail from './components/ProductDetail';
-import History from './components/History';
-import Wishlist from './components/Wishlist';
-import CompareModal from './components/CompareModal';
 import Footer from './components/Footer';
 import ScrollToTop from './components/ScrollToTop';
-import Login from './components/Auth/Login';
-import Signup from './components/Auth/Signup';
+import DealBanner from './components/DealBanner';
+import TrendingGrid from './components/TrendingGrid';
+import FeaturesSection from './components/FeaturesSection';
+import SkeletonLoader from './components/SkeletonLoader';
+import { useToast } from './components/Toast';
 
 import './App.css';
+
+const History = lazy(() => import('./components/History'));
+const Wishlist = lazy(() => import('./components/Wishlist'));
+const CompareModal = lazy(() => import('./components/CompareModal'));
+const Login = lazy(() => import('./components/Auth/Login'));
+const Signup = lazy(() => import('./components/Auth/Signup'));
+const CategoryGrid = lazy(() => import('./components/CategoryGrid'));
 
 const ALL_TRENDING_PRODUCTS = [
   { title: "iPhone 15 Pro", image: "https://m.media-amazon.com/images/I/81SigpJN1KL._AC_SL1500_.jpg", price: "₹1,34,900", tag: "Hot Tech", query: "iPhone 15 Pro" },
@@ -30,14 +36,7 @@ const ALL_TRENDING_PRODUCTS = [
   { title: "Apple Watch S9", image: "https://m.media-amazon.com/images/I/71XMTLtZd5L._AC_SL1500_.jpg", price: "₹41,900", tag: "Wearable", query: "Apple Watch Series 9" }
 ];
 
-const CATEGORIES = [
-  { name: "Electronics", icon: "📱", query: "Best Electronics Deals" },
-  { name: "Fashion", icon: "👕", query: "Trending Fashion Men Women" },
-  { name: "Home & Kitchen", icon: "🏠", query: "Home Kitchen Appliances" },
-  { name: "Beauty", icon: "💄", query: "Beauty Products Best Sellers" },
-  { name: "Sneakers", icon: "👟", query: "Best Sneakers for Men" },
-  { name: "Laptops", icon: "💻", query: "Best Gaming Laptops" }
-];
+
 
 const getStoreStyle = (sourceName) => {
   const name = sourceName ? sourceName.toLowerCase() : "";
@@ -67,6 +66,7 @@ function MainApp() {
   const [storeFilter, setStoreFilter] = useState("");
   const [compareItems, setCompareItems] = useState([]);
   const [showCompareModal, setShowCompareModal] = useState(false);
+  const { addToast, ToastContainer } = useToast();
 
   const navigate = useNavigate();
 
@@ -101,7 +101,7 @@ function MainApp() {
       setProducts(res.data);
     } catch (err) {
       console.error(err);
-      alert("Error fetching data. Check your backend and API keys.");
+      addToast("Error fetching data. Check your backend and API keys.");
     }
     setLoading(false);
   };
@@ -156,18 +156,22 @@ function MainApp() {
     });
   };
 
-  const filteredProducts = products.filter(p => {
-    if (minPrice && p.raw_price < parseInt(minPrice)) return false;
-    if (maxPrice && p.raw_price > parseInt(maxPrice)) return false;
-    if (storeFilter && !p.source.toLowerCase().includes(storeFilter.toLowerCase())) return false;
-    return true;
-  });
+  const filteredProducts = useMemo(() => {
+    return products.filter(p => {
+      if (minPrice && p.raw_price < parseInt(minPrice)) return false;
+      if (maxPrice && p.raw_price > parseInt(maxPrice)) return false;
+      if (storeFilter && !p.source.toLowerCase().includes(storeFilter.toLowerCase())) return false;
+      return true;
+    });
+  }, [products, minPrice, maxPrice, storeFilter]);
 
-  const sortedProducts = [...filteredProducts].sort((a, b) => {
-    if (sortOrder === "low") return a.raw_price - b.raw_price;
-    if (sortOrder === "high") return b.raw_price - a.raw_price;
-    return 0; // Relevance / Default
-  });
+  const sortedProducts = useMemo(() => {
+    return [...filteredProducts].sort((a, b) => {
+      if (sortOrder === "low") return a.raw_price - b.raw_price;
+      if (sortOrder === "high") return b.raw_price - a.raw_price;
+      return 0; // Relevance / Default
+    });
+  }, [filteredProducts, sortOrder]);
 
   const featuredDeal = dailyDeals.length > 0 ? dailyDeals[0] : null;
 
@@ -175,73 +179,31 @@ function MainApp() {
     <div className={`app-container ${darkMode ? 'dark-mode' : ''}`}>
       <Navbar darkMode={darkMode} setDarkMode={setDarkMode} />
       
-      <Routes>
-        <Route path="/login" element={<Login />} />
-        <Route path="/signup" element={<Signup />} />
-        <Route path="/history" element={<History />} />
-        <Route path="/wishlist" element={<Wishlist />} />
-        
-        <Route path="/" element={
-          <>
-            <SearchBar query={query} setQuery={setQuery} onSearch={searchProducts} analyzing={analyzing} handleImageUpload={handleImageUpload} loading={loading} />
-            <div className="main-content fade-in">
-              {featuredDeal && (
-                <div className="banner" style={{background: 'linear-gradient(135deg, var(--primary), var(--secondary))', color: 'white', padding: '40px', borderRadius: '20px', marginBottom: '40px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '20px'}}>
-                  <div style={{flex: '1 1 300px'}}>
-                    <span style={{background: 'rgba(255,255,255,0.2)', padding: '5px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: 600}}>DEAL OF THE DAY</span>
-                    <h1 style={{fontSize: '36px', margin: '15px 0', color: 'white'}}>{featuredDeal.title}</h1>
-                    <p style={{fontSize: '18px', opacity: 0.9, marginBottom: '20px'}}>Grab the absolute lowest price on the market. Normally ₹{(featuredDeal.price.replace(/[^0-9]/g, '') * 1.2).toFixed(0)}, now just {featuredDeal.price}.</p>
-                    <button className="primary-btn" onClick={() => searchProducts(featuredDeal.query)} style={{background: 'white', color: 'var(--primary)', fontWeight: 700}}>Claim Now</button>
-                  </div>
-                  <img src={featuredDeal.image} alt="Deal" style={{maxHeight: '200px', objectFit: 'contain', background: 'white', padding: '10px', borderRadius: '15px'}}/>
-                </div>
-              )}
-              <div className="section-header">
-                  <h2>🔥 Trending Deals Today</h2>
-                  <p>Best prices tracked across Amazon, Flipkart & more</p>
+      <Suspense fallback={<div className="main-content"><SkeletonLoader count={3} /></div>}>
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route path="/signup" element={<Signup />} />
+          <Route path="/history" element={<History />} />
+          <Route path="/wishlist" element={<Wishlist />} />
+          
+          <Route path="/" element={
+            <>
+              <SearchBar query={query} setQuery={setQuery} onSearch={searchProducts} analyzing={analyzing} handleImageUpload={handleImageUpload} loading={loading} />
+              <div className="main-content fade-in">
+                {loading ? <SkeletonLoader count={6} /> : (
+                  <>
+                    <DealBanner featuredDeal={featuredDeal} searchProducts={searchProducts} />
+                    <TrendingGrid dailyDeals={dailyDeals} searchProducts={searchProducts} />
+                    <FeaturesSection />
+                  </>
+                )}
               </div>
-              <div className="trending-grid">
-                  {dailyDeals.map((deal, idx) => (
-                      <div key={idx} className="trend-card" onClick={() => searchProducts(deal.query)}>
-                          <div className="trend-tag">{deal.tag}</div>
-                          <img src={deal.image} alt={deal.title} className="trend-img" />
-                          <h3>{deal.title}</h3>
-                          <div className="price-row">
-                              <span className="price">{deal.price}</span>
-                              <span className="store-badge">Compare &rarr;</span>
-                          </div>
-                      </div>
-                  ))}
-              </div>
-              <div className="features-section">
-                  <div className="section-header">
-                      <h2>Why use Autonshop?</h2>
-                      <p>We do the hard work so you save money instantly.</p>
-                  </div>
-                  <div className="features-grid">
-                      <div className="feature-card"><div className="feature-icon"><TrendingUp size={32}/></div><h3>Real-Time Comparison</h3><p>We scan top retailers in milliseconds to find the absolute lowest price.</p></div>
-                      <div className="feature-card"><div className="feature-icon"><BarChart3 size={32}/></div><h3>30-Day Price History</h3><p>Check the price graph to know if it's a good time to buy or if you should wait.</p></div>
-                      <div className="feature-card"><div className="feature-icon"><ShieldCheck size={32}/></div><h3>Deal Rating AI</h3><p>Our algorithm rates every price as "Fair", "Great Deal", or "Overpriced" instantly.</p></div>
-                  </div>
-              </div>
-            </div>
-          </>
-        } />
+            </>
+          } />
 
-        <Route path="/categories" element={
-          <div className="main-content fade-in">
-             <div className="section-header"><h2>Explore Categories</h2><p>Select a category to find the best market prices</p></div>
-             <div className="category-grid">
-                 {CATEGORIES.map((cat, idx) => (
-                     <div key={idx} className="category-card" onClick={() => searchProducts(cat.query)}>
-                         <span className="cat-icon">{cat.icon}</span><h3>{cat.name}</h3>
-                     </div>
-                 ))}
-             </div>
-          </div>
-        } />
+          <Route path="/categories" element={<CategoryGrid searchProducts={searchProducts} />} />
 
-        <Route path="/results" element={
+          <Route path="/results" element={
           <>
             <SearchBar query={query} setQuery={setQuery} onSearch={searchProducts} analyzing={analyzing} handleImageUpload={handleImageUpload} loading={loading} />
             <div className="main-content fade-in" style={{flexDirection: 'row', gap: '20px', alignItems: 'flex-start'}}>
@@ -273,16 +235,18 @@ function MainApp() {
 
                   {products.length === 0 && !loading && <div className="placeholder"><h2>No results found</h2></div>}
                   
-                  {sortedProducts.map((item, index) => (
-                      <ProductCard 
-                         key={index} 
-                         item={item} 
-                         isSelected={selectedProduct === item} 
-                         onClick={() => handleProductSelect(item)} 
-                         onCompareToggle={handleCompareToggle}
-                         isCompared={compareItems.some(p => p.title === item.title)}
-                      />
-                  ))}
+                  {loading ? <SkeletonLoader count={8} /> : (
+                    sortedProducts.map((item, index) => (
+                        <ProductCard 
+                           key={item.title + index} 
+                           item={item} 
+                           isSelected={selectedProduct === item} 
+                           onClick={() => handleProductSelect(item)} 
+                           onCompareToggle={handleCompareToggle}
+                           isCompared={compareItems.some(p => p.title === item.title)}
+                        />
+                    ))
+                  )}
                 </div>
                 {selectedProduct && (
                   <ProductDetail selectedProduct={selectedProduct} getAlternativeProduct={getAlternativeProduct} getStoreStyle={getStoreStyle} />
@@ -291,6 +255,7 @@ function MainApp() {
           </>
         } />
       </Routes>
+      </Suspense>
 
       {compareItems.length > 0 && (
          <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: 'var(--card-bg)', borderTop: '1px solid var(--border-color)', padding: '15px 40px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', zIndex: 1000, boxShadow: '0 -4px 15px rgba(0,0,0,0.1)' }}>
@@ -312,11 +277,14 @@ function MainApp() {
       )}
 
       {showCompareModal && (
-        <CompareModal items={compareItems} onClose={() => setShowCompareModal(false)} />
+        <Suspense fallback={<div>Loading Modal...</div>}>
+          <CompareModal items={compareItems} onClose={() => setShowCompareModal(false)} />
+        </Suspense>
       )}
 
       <ScrollToTop />
       <Footer />
+      <ToastContainer />
     </div>
   );
 }
