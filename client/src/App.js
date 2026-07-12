@@ -1,27 +1,33 @@
 // client/src/App.js
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
-import { Search, ExternalLink, Loader, Clock, ArrowLeft, Camera, Zap, TrendingUp, ShieldCheck, BarChart3, Moon, Sun, Link as LinkIcon } from 'lucide-react'; 
+import { BrowserRouter as Router, Routes, Route, useNavigate } from 'react-router-dom';
+import { TrendingUp, ShieldCheck, BarChart3 } from 'lucide-react';
+import * as mobilenet from '@tensorflow-models/mobilenet';
+import '@tensorflow/tfjs';
+
+import { AuthProvider } from './context/AuthContext';
+import Navbar from './components/Navbar';
+import SearchBar from './components/SearchBar';
+import ProductCard from './components/ProductCard';
+import ProductDetail from './components/ProductDetail';
+import History from './components/History';
+import Wishlist from './components/Wishlist';
+import CompareModal from './components/CompareModal';
+import Footer from './components/Footer';
+import ScrollToTop from './components/ScrollToTop';
+import Login from './components/Auth/Login';
+import Signup from './components/Auth/Signup';
+
 import './App.css';
 
-import '@tensorflow/tfjs';
-import * as mobilenet from '@tensorflow-models/mobilenet';
-
-// --- DATA: STABLE AMAZON IMAGES ---
 const ALL_TRENDING_PRODUCTS = [
-  // TECH
   { title: "iPhone 15 Pro", image: "https://m.media-amazon.com/images/I/81SigpJN1KL._AC_SL1500_.jpg", price: "₹1,34,900", tag: "Hot Tech", query: "iPhone 15 Pro" },
   { title: "PlayStation 5", image: "https://m.media-amazon.com/images/I/51051FiD9UL._SL1000_.jpg", price: "₹44,990", tag: "Gamer's Pick", query: "PlayStation 5 Console" },
   { title: "Samsung S24 Ultra", image: "https://m.media-amazon.com/images/I/81vxWpPpgNL._AC_SL1500_.jpg", price: "₹1,29,999", tag: "Android King", query: "Samsung Galaxy S24 Ultra" },
   { title: "MacBook Air M2", image: "https://m.media-amazon.com/images/I/719C6bJv8jL._AC_SL1500_.jpg", price: "₹99,900", tag: "Student Fav", query: "Apple MacBook Air M2" },
   { title: "Sony WH-1000XM5", image: "https://m.media-amazon.com/images/I/51SKmu2G9FL._AC_SL1000_.jpg", price: "₹26,990", tag: "Best Audio", query: "Sony WH-1000XM5 Headphones" },
-  { title: "Apple Watch S9", image: "https://m.media-amazon.com/images/I/71XMTLtZd5L._AC_SL1500_.jpg", price: "₹41,900", tag: "Wearable", query: "Apple Watch Series 9" },
-  
-  // LIFESTYLE
-  { title: "Nike Air Jordan", image: "https://m.media-amazon.com/images/I/71C8F0qy8gL._AC_UY1000_.jpg", price: "₹11,995", tag: "Streetwear", query: "Nike Air Jordan 1 High" },
-  { title: "Canon EOS R5", image: "https://m.media-amazon.com/images/I/71M5b8l+bBL._AC_SL1500_.jpg", price: "₹3,39,995", tag: "Photography", query: "Canon EOS R5 Camera" },
-  { title: "Xbox Series X", image: "https://m.media-amazon.com/images/I/61-jjE67uqL._SL1500_.jpg", price: "₹49,990", tag: "Console", query: "Xbox Series X Console" }
+  { title: "Apple Watch S9", image: "https://m.media-amazon.com/images/I/71XMTLtZd5L._AC_SL1500_.jpg", price: "₹41,900", tag: "Wearable", query: "Apple Watch Series 9" }
 ];
 
 const CATEGORIES = [
@@ -33,23 +39,36 @@ const CATEGORIES = [
   { name: "Laptops", icon: "💻", query: "Best Gaming Laptops" }
 ];
 
-function App() {
+const getStoreStyle = (sourceName) => {
+  const name = sourceName ? sourceName.toLowerCase() : "";
+  if (name.includes('amazon')) return { bg: '#232f3e', label: 'Amz' };
+  if (name.includes('flipkart')) return { bg: '#2874f0', label: 'Flip' };
+  if (name.includes('croma')) return { bg: '#00b5b5', label: 'Croma' };
+  if (name.includes('ajio')) return { bg: '#2c4152', label: 'Ajio' };
+  if (name.includes('reliance')) return { bg: '#e42529', label: 'Rel' };
+  if (name.includes('tata')) return { bg: '#5f259f', label: 'Tata' };
+  return { bg: '#666', label: 'Store' }; 
+};
+
+function MainApp() {
   const [query, setQuery] = useState("");
   const [products, setProducts] = useState([]);
-  const [history, setHistory] = useState([]); 
   const [loading, setLoading] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
-  const [view, setView] = useState('home'); 
   const [model, setModel] = useState(null);
   const [dailyDeals, setDailyDeals] = useState([]);
-  const [darkMode, setDarkMode] = useState(false);
-  
-  const fileInputRef = useRef(null);
+  const [darkMode, setDarkMode] = useState(() => {
+    return localStorage.getItem('autonshop_darkmode') === 'true';
+  });
+  const [sortOrder, setSortOrder] = useState("");
+  const [minPrice, setMinPrice] = useState("");
+  const [maxPrice, setMaxPrice] = useState("");
+  const [storeFilter, setStoreFilter] = useState("");
+  const [compareItems, setCompareItems] = useState([]);
+  const [showCompareModal, setShowCompareModal] = useState(false);
 
-  const handleImageError = (e) => {
-    e.target.src = "https://placehold.co/400x400/png?text=Product+Image";
-  };
+  const navigate = useNavigate();
 
   useEffect(() => {
     async function initApp() {
@@ -61,30 +80,30 @@ function App() {
     initApp();
   }, []);
 
+  useEffect(() => {
+    localStorage.setItem('autonshop_darkmode', darkMode);
+  }, [darkMode]);
+
   const searchProducts = async (searchTerm = query) => {
     if(!searchTerm) return;
     setLoading(true);
     setProducts([]);
     setSelectedProduct(null);
-    setView('results'); 
     setQuery(searchTerm);
+    setSortOrder("");
+    setMinPrice("");
+    setMaxPrice("");
+    setStoreFilter("");
+    navigate('/results');
 
     try {
       const res = await axios.get(`http://localhost:5000/api/search?q=${encodeURIComponent(searchTerm)}`);
       setProducts(res.data);
     } catch (err) {
       console.error(err);
-      alert("Error fetching data. Is the local server running?");
+      alert("Error fetching data. Check your backend and API keys.");
     }
     setLoading(false);
-  };
-
-  const fetchHistory = async () => {
-      try {
-          const res = await axios.get('http://localhost:5000/api/history');
-          setHistory(res.data);
-          setView('history');
-      } catch (err) { console.error(err); }
   };
 
   const handleImageUpload = (event) => {
@@ -107,223 +126,208 @@ function App() {
     }
   };
 
-  // --- NEW HELPER: Get Color & Label for Stores ---
-  const getStoreStyle = (sourceName) => {
-    const name = sourceName ? sourceName.toLowerCase() : "";
-    if (name.includes('amazon')) return { bg: '#232f3e', label: 'Amz' };
-    if (name.includes('flipkart')) return { bg: '#2874f0', label: 'Flip' };
-    if (name.includes('croma')) return { bg: '#00b5b5', label: 'Croma' };
-    if (name.includes('ajio')) return { bg: '#2c4152', label: 'Ajio' };
-    if (name.includes('reliance')) return { bg: '#e42529', label: 'Rel' };
-    if (name.includes('tata')) return { bg: '#5f259f', label: 'Tata' };
-    return { bg: '#666', label: 'Store' }; // Default gray for unknown stores
+  const handleProductSelect = (item) => {
+    setSelectedProduct(item);
+    // Save to local storage for History feature
+    const saved = JSON.parse(localStorage.getItem('autonshop_history')) || [];
+    const filtered = saved.filter(p => p.title !== item.title);
+    filtered.unshift(item);
+    if(filtered.length > 12) filtered.pop();
+    localStorage.setItem('autonshop_history', JSON.stringify(filtered));
   };
 
-  // --- NEW LOGIC: Find a Real Alternative Product ---
   const getAlternativeProduct = () => {
     if (!selectedProduct || products.length < 2) return null;
-    // Find the first product that is NOT from the same store as the selected one
     const alt = products.find(p => p.source !== selectedProduct.source);
-    
-    // If found, return it. If not, create a generic "Retail" placeholder
     return alt || {
         source: "Local Retail",
-        raw_price: selectedProduct.raw_price * 1.15, // 15% more expensive mock
+        raw_price: selectedProduct.raw_price * 1.15,
         price: "₹" + (selectedProduct.raw_price * 1.15).toFixed(0),
         link: "#"
     };
   };
 
-  const altProduct = getAlternativeProduct();
+  const handleCompareToggle = (item) => {
+    setCompareItems(prev => {
+      const exists = prev.find(p => p.title === item.title);
+      if (exists) return prev.filter(p => p.title !== item.title);
+      if (prev.length >= 2) return [prev[1], item];
+      return [...prev, item];
+    });
+  };
+
+  const filteredProducts = products.filter(p => {
+    if (minPrice && p.raw_price < parseInt(minPrice)) return false;
+    if (maxPrice && p.raw_price > parseInt(maxPrice)) return false;
+    if (storeFilter && !p.source.toLowerCase().includes(storeFilter.toLowerCase())) return false;
+    return true;
+  });
+
+  const sortedProducts = [...filteredProducts].sort((a, b) => {
+    if (sortOrder === "low") return a.raw_price - b.raw_price;
+    if (sortOrder === "high") return b.raw_price - a.raw_price;
+    return 0; // Relevance / Default
+  });
+
+  const featuredDeal = dailyDeals.length > 0 ? dailyDeals[0] : null;
 
   return (
     <div className={`app-container ${darkMode ? 'dark-mode' : ''}`}>
-      <header className="navbar">
-        <div className="logo" onClick={() => {setView('home'); setProducts([]); setQuery(""); }}>
-            <span className="logo-text">Autonshop</span>
-        </div>
-        <div className="nav-group-right">
-            <div className="nav-links">
-                <span onClick={() => {setView('home'); setProducts([]); setQuery(""); }}>Deals</span>
-                <span onClick={() => setView('categories')}>Categories</span>
-                <span onClick={fetchHistory}>History</span>
-            </div>
-            <button className="theme-toggle" onClick={() => setDarkMode(!darkMode)}>
-                {darkMode ? <Sun size={20} color="#FF6B00"/> : <Moon size={20} />}
-            </button>
-        </div>
-      </header>
-
-      <div className="search-section">
-        <div className="search-bar-container">
-            {query.includes('http') ? <LinkIcon className="search-icon" size={20} color="#2563EB"/> : <Search className="search-icon" size={20}/>}
-            
-            <input 
-              type="text" 
-              placeholder={analyzing ? "AI is looking..." : "Search product or paste a link..."}
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && searchProducts()}
-            />
-            
-            <input type="file" ref={fileInputRef} style={{display: 'none'}} accept="image/*" onChange={handleImageUpload} />
-            {analyzing ? <Zap className="spin camera-icon" color="#FF6B00" /> : <Camera className="camera-icon" size={20} onClick={() => fileInputRef.current.click()} />}
-            
-            <button onClick={() => searchProducts()} className="search-btn">
-                {loading ? <Loader className="spin" size={18}/> : "Search"}
-            </button>
-        </div>
-      </div>
-
-      <div className="main-content">
+      <Navbar darkMode={darkMode} setDarkMode={setDarkMode} />
+      
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        <Route path="/signup" element={<Signup />} />
+        <Route path="/history" element={<History />} />
+        <Route path="/wishlist" element={<Wishlist />} />
         
-        {view === 'home' && (
-            <div className="home-container fade-in">
-                <div className="section-header">
-                    <h2>🔥 Trending Deals Today</h2>
-                    <p>Best prices tracked across Amazon, Flipkart & Ajio</p>
+        <Route path="/" element={
+          <>
+            <SearchBar query={query} setQuery={setQuery} onSearch={searchProducts} analyzing={analyzing} handleImageUpload={handleImageUpload} loading={loading} />
+            <div className="main-content fade-in">
+              {featuredDeal && (
+                <div className="banner" style={{background: 'linear-gradient(135deg, var(--primary), var(--secondary))', color: 'white', padding: '40px', borderRadius: '20px', marginBottom: '40px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '20px'}}>
+                  <div style={{flex: '1 1 300px'}}>
+                    <span style={{background: 'rgba(255,255,255,0.2)', padding: '5px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: 600}}>DEAL OF THE DAY</span>
+                    <h1 style={{fontSize: '36px', margin: '15px 0', color: 'white'}}>{featuredDeal.title}</h1>
+                    <p style={{fontSize: '18px', opacity: 0.9, marginBottom: '20px'}}>Grab the absolute lowest price on the market. Normally ₹{(featuredDeal.price.replace(/[^0-9]/g, '') * 1.2).toFixed(0)}, now just {featuredDeal.price}.</p>
+                    <button className="primary-btn" onClick={() => searchProducts(featuredDeal.query)} style={{background: 'white', color: 'var(--primary)', fontWeight: 700}}>Claim Now</button>
+                  </div>
+                  <img src={featuredDeal.image} alt="Deal" style={{maxHeight: '200px', objectFit: 'contain', background: 'white', padding: '10px', borderRadius: '15px'}}/>
                 </div>
-                <div className="trending-grid">
-                    {dailyDeals.map((deal, idx) => (
-                        <div key={idx} className="trend-card" onClick={() => searchProducts(deal.query)}>
-                            <div className="trend-tag">{deal.tag}</div>
-                            <img src={deal.image} alt={deal.title} className="trend-img" onError={handleImageError} />
-                            <h3>{deal.title}</h3>
-                            <div className="price-row">
-                                <span className="price">{deal.price}</span>
-                                <span className="store-badge">Compare &rarr;</span>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-                <div className="features-section">
-                    <div className="section-header">
-                        <h2>Why use Autonshop?</h2>
-                        <p>We do the hard work so you save money instantly.</p>
-                    </div>
-                    <div className="features-grid">
-                        <div className="feature-card"><div className="feature-icon"><TrendingUp size={32}/></div><h3>Real-Time Comparison</h3><p>We scan Amazon, Flipkart, and Ajio in milliseconds to find the absolute lowest price.</p></div>
-                        <div className="feature-card"><div className="feature-icon"><BarChart3 size={32}/></div><h3>30-Day Price History</h3><p>Check the price graph to know if it's a good time to buy or if you should wait.</p></div>
-                        <div className="feature-card"><div className="feature-icon"><ShieldCheck size={32}/></div><h3>Deal Rating AI</h3><p>Our algorithm rates every price as "Fair", "Great Deal", or "Overpriced" instantly.</p></div>
-                    </div>
-                </div>
+              )}
+              <div className="section-header">
+                  <h2>🔥 Trending Deals Today</h2>
+                  <p>Best prices tracked across Amazon, Flipkart & more</p>
+              </div>
+              <div className="trending-grid">
+                  {dailyDeals.map((deal, idx) => (
+                      <div key={idx} className="trend-card" onClick={() => searchProducts(deal.query)}>
+                          <div className="trend-tag">{deal.tag}</div>
+                          <img src={deal.image} alt={deal.title} className="trend-img" />
+                          <h3>{deal.title}</h3>
+                          <div className="price-row">
+                              <span className="price">{deal.price}</span>
+                              <span className="store-badge">Compare &rarr;</span>
+                          </div>
+                      </div>
+                  ))}
+              </div>
+              <div className="features-section">
+                  <div className="section-header">
+                      <h2>Why use Autonshop?</h2>
+                      <p>We do the hard work so you save money instantly.</p>
+                  </div>
+                  <div className="features-grid">
+                      <div className="feature-card"><div className="feature-icon"><TrendingUp size={32}/></div><h3>Real-Time Comparison</h3><p>We scan top retailers in milliseconds to find the absolute lowest price.</p></div>
+                      <div className="feature-card"><div className="feature-icon"><BarChart3 size={32}/></div><h3>30-Day Price History</h3><p>Check the price graph to know if it's a good time to buy or if you should wait.</p></div>
+                      <div className="feature-card"><div className="feature-icon"><ShieldCheck size={32}/></div><h3>Deal Rating AI</h3><p>Our algorithm rates every price as "Fair", "Great Deal", or "Overpriced" instantly.</p></div>
+                  </div>
+              </div>
             </div>
-        )}
+          </>
+        } />
 
-        {view === 'categories' && (
-            <div className="home-container fade-in">
-                <div className="section-header"><h2>Explore Categories</h2><p>Select a category to find the best market prices</p></div>
-                <div className="category-grid">
-                    {CATEGORIES.map((cat, idx) => (
-                        <div key={idx} className="category-card" onClick={() => searchProducts(cat.query)}>
-                            <span className="cat-icon">{cat.icon}</span><h3>{cat.name}</h3>
-                        </div>
-                    ))}
-                </div>
-            </div>
-        )}
+        <Route path="/categories" element={
+          <div className="main-content fade-in">
+             <div className="section-header"><h2>Explore Categories</h2><p>Select a category to find the best market prices</p></div>
+             <div className="category-grid">
+                 {CATEGORIES.map((cat, idx) => (
+                     <div key={idx} className="category-card" onClick={() => searchProducts(cat.query)}>
+                         <span className="cat-icon">{cat.icon}</span><h3>{cat.name}</h3>
+                     </div>
+                 ))}
+             </div>
+          </div>
+        } />
 
-        {view === 'history' && (
-            <div className="history-container fade-in" style={{width: '100%'}}>
-                <h2><Clock size={24} style={{verticalAlign: 'middle'}}/> Search History</h2>
-                <div className="history-grid">
-                    {history.map((item, idx) => (
-                        <div key={idx} className="product-card" onClick={() => searchProducts(item.term)}>
-                            <div className="info">
-                                <p style={{color: '#999', fontSize: '12px'}}>{new Date(item.searchDate).toLocaleDateString()}</p>
-                                <h3>{item.term}</h3><span className="price">{item.topResult.price}</span>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-                <button onClick={() => setView('home')} className="search-btn" style={{marginTop:'20px'}}><ArrowLeft size={16}/> Back</button>
-            </div>
-        )}
-
-        {view === 'results' && (
-            <div className="fade-in" style={{width: '100%', display: 'flex', gap: '20px'}}>
+        <Route path="/results" element={
+          <>
+            <SearchBar query={query} setQuery={setQuery} onSearch={searchProducts} analyzing={analyzing} handleImageUpload={handleImageUpload} loading={loading} />
+            <div className="main-content fade-in" style={{flexDirection: 'row', gap: '20px', alignItems: 'flex-start'}}>
                 <div className="product-list">
-                {products.length === 0 && !loading && <div className="placeholder"><h2>No results found</h2></div>}
-                {products.map((item, index) => (
-                    <div key={index} className={`product-card ${selectedProduct === item ? 'active' : ''}`} onClick={() => setSelectedProduct(item)}>
-                        <div className="card-image"><img src={item.image} alt={item.title} onError={handleImageError} /></div>
-                        <div className="info">
-                            <h3>{item.title}</h3>
-                            <p className="desc-text">{item.source}</p>
-                            <div className="price-row"><span className="price">{item.price}</span><span className="badge fair-price">{item.deal_rating}</span></div>
-                        </div>
+                  
+                  {products.length > 0 && (
+                    <div className="results-header" style={{display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '20px'}}>
+                      <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap'}}>
+                         <span style={{fontWeight: 600, color: 'var(--gray)'}}>{filteredProducts.length} Results</span>
+                         <select value={sortOrder} onChange={e => setSortOrder(e.target.value)} className="sort-dropdown">
+                           <option value="">Sort by Relevance</option>
+                           <option value="low">Price: Low to High</option>
+                           <option value="high">Price: High to Low</option>
+                         </select>
+                      </div>
+                      <div style={{display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center'}}>
+                         <input type="number" placeholder="Min Price (₹)" value={minPrice} onChange={e => setMinPrice(e.target.value)} className="sort-dropdown" style={{width: '120px'}} />
+                         <input type="number" placeholder="Max Price (₹)" value={maxPrice} onChange={e => setMaxPrice(e.target.value)} className="sort-dropdown" style={{width: '120px'}} />
+                         <select value={storeFilter} onChange={e => setStoreFilter(e.target.value)} className="sort-dropdown">
+                            <option value="">All Stores</option>
+                            <option value="amazon">Amazon</option>
+                            <option value="flipkart">Flipkart</option>
+                            <option value="croma">Croma</option>
+                            <option value="reliance">Reliance Digital</option>
+                         </select>
+                      </div>
                     </div>
-                ))}
-                </div>
+                  )}
 
+                  {products.length === 0 && !loading && <div className="placeholder"><h2>No results found</h2></div>}
+                  
+                  {sortedProducts.map((item, index) => (
+                      <ProductCard 
+                         key={index} 
+                         item={item} 
+                         isSelected={selectedProduct === item} 
+                         onClick={() => handleProductSelect(item)} 
+                         onCompareToggle={handleCompareToggle}
+                         isCompared={compareItems.some(p => p.title === item.title)}
+                      />
+                  ))}
+                </div>
                 {selectedProduct && (
-                <div className="detail-view">
-                    <div className="detail-header">
-                        <h2>{selectedProduct.title}</h2>
-                        <div className="main-price-block"><h1>{selectedProduct.price}</h1><span className="badge fair-price-large">Fair Price</span></div>
-                    </div>
-                    <div className="chart-container">
-                        <h3>30-Day Price History</h3>
-                        <div style={{ width: '100%', height: 200 }}>
-                            <ResponsiveContainer>
-                                <AreaChart data={selectedProduct.history}>
-                                    <defs><linearGradient id="colorPrice" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#2563eb" stopOpacity={0.1}/><stop offset="95%" stopColor="#2563eb" stopOpacity={0}/></linearGradient></defs>
-                                    <XAxis dataKey="day" hide /><YAxis hide domain={['auto', 'auto']} /><Tooltip />
-                                    <Area type="monotone" dataKey="price" stroke="#2563eb" strokeWidth={3} fill="url(#colorPrice)" />
-                                </AreaChart>
-                            </ResponsiveContainer>
-                        </div>
-                    </div>
-                    <div className="comparison-section">
-                        <h3>Live Price Comparison</h3>
-                        
-                        {/* 1. BEST OPTION (The one you clicked) */}
-                        <div className="compare-card best-option">
-                            <div className="store-info">
-                                {/* Dynamic Logo Color */}
-                                <div className="store-logo" style={{backgroundColor: getStoreStyle(selectedProduct.source).bg}}>
-                                    {getStoreStyle(selectedProduct.source).label}
-                                </div>
-                                <div>
-                                    <span className="store-name">{selectedProduct.source || "Best Store"}</span>
-                                    <div className="lowest-label">Lowest Price</div>
-                                </div>
-                            </div>
-                            <div className="price-action">
-                                <span className="price-bold">{selectedProduct.price}</span>
-                                <a href={selectedProduct.link} target="_blank" rel="noreferrer" className="buy-btn-small">Buy <ExternalLink size={12}/></a>
-                            </div>
-                        </div>
-
-                        {/* 2. ALTERNATIVE OPTION (Real competitor from the list) */}
-                        {altProduct && (
-                            <div className="compare-card">
-                                <div className="store-info">
-                                    <div className="store-logo" style={{backgroundColor: getStoreStyle(altProduct.source).bg}}>
-                                        {getStoreStyle(altProduct.source).label}
-                                    </div>
-                                    <div>
-                                        <span className="store-name">{altProduct.source || "Alternative"}</span>
-                                        <div className="diff-label">Check Price</div>
-                                    </div>
-                                </div>
-                                <div className="price-action">
-                                    <span className="price-bold">{altProduct.price}</span>
-                                    {altProduct.link !== "#" ? (
-                                        <a href={altProduct.link} target="_blank" rel="noreferrer" className="view-btn-small" style={{textDecoration:'none', fontSize:'13px', display:'flex', alignItems:'center'}}>View</a>
-                                    ) : (
-                                        <button className="view-btn-small">View</button>
-                                    )}
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                </div>
+                  <ProductDetail selectedProduct={selectedProduct} getAlternativeProduct={getAlternativeProduct} getStoreStyle={getStoreStyle} />
                 )}
             </div>
-        )}
-      </div>
+          </>
+        } />
+      </Routes>
+
+      {compareItems.length > 0 && (
+         <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: 'var(--card-bg)', borderTop: '1px solid var(--border-color)', padding: '15px 40px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', zIndex: 1000, boxShadow: '0 -4px 15px rgba(0,0,0,0.1)' }}>
+            <div>
+               <h4 style={{ margin: '0 0 5px 0' }}>Compare Products ({compareItems.length}/2)</h4>
+               <p style={{ margin: 0, fontSize: '13px', color: 'var(--gray)' }}>{compareItems.map(i => i.title.substring(0,25) + '...').join(' vs ')}</p>
+            </div>
+            <div style={{ display: 'flex', gap: '15px' }}>
+               <button onClick={() => setCompareItems([])} style={{ background: 'transparent', border: 'none', color: 'var(--gray)', cursor: 'pointer', fontWeight: 600 }}>Clear</button>
+               <button 
+                 onClick={() => setShowCompareModal(true)} 
+                 disabled={compareItems.length < 2}
+                 style={{ background: compareItems.length === 2 ? 'var(--primary)' : 'var(--border-color)', color: compareItems.length === 2 ? 'white' : 'var(--gray)', padding: '10px 20px', borderRadius: '8px', border: 'none', fontWeight: 600, cursor: compareItems.length === 2 ? 'pointer' : 'not-allowed' }}
+               >
+                 Compare Now
+               </button>
+            </div>
+         </div>
+      )}
+
+      {showCompareModal && (
+        <CompareModal items={compareItems} onClose={() => setShowCompareModal(false)} />
+      )}
+
+      <ScrollToTop />
+      <Footer />
     </div>
+  );
+}
+
+function App() {
+  return (
+    <Router>
+      <AuthProvider>
+        <MainApp />
+      </AuthProvider>
+    </Router>
   );
 }
 

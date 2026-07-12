@@ -1,34 +1,28 @@
-// server/index.js (Bulletproof Version)
+// server/index.js (Refactored Version)
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
-const axios = require('axios'); // Using axios is more stable than the serpapi library
-
-// Try to import the model, but don't crash if it's missing
-let SearchHistory;
-try {
-    SearchHistory = require('./models/SearchHistory');
-} catch (e) {
-    console.log("⚠️ Could not find SearchHistory model. History feature will be disabled.");
-}
+const axios = require('axios');
 
 const app = express();
+
+// --- MIDDLEWARE ---
 app.use(cors());
 app.use(express.json());
 
+// --- ROUTES ---
+app.use('/api/auth', require('./routes/auth'));
+app.use('/api/alerts', require('./routes/alerts'));
+
 // --- CONFIGURATION ---
-
-// 1. SAIF API KEY 
-const API_KEY = "your_real_serpapi_key_here"; 
-
-// 2. SAIF MONGODB CONNECTION
-const DB_URI ="your_real_mongodb_connection_string_here";
+const API_KEY = process.env.SERPAPI_KEY || "your_real_serpapi_key_here";
+const DB_URI = process.env.DB_URI || "mongodb://localhost:27017/autonshop_dummy";
 
 // --- DATABASE CONNECTION ---
 mongoose.connect(DB_URI)
-  .then(() => console.log("✅ Connected to MongoDB Atlas"))
-  .catch(err => console.error("❌ MongoDB Connection Error:", err));
+  .then(() => console.log("✅ Connected to MongoDB"))
+  .catch(err => console.error("❌ MongoDB Connection Error:", err.message));
 
 // Helper for chart
 const generateHistory = (currentPrice) => {
@@ -88,19 +82,12 @@ app.get('/api/search', async (req, res) => {
       let dealRating = "Fair Price";
       if (item.extracted_price < item.old_price) dealRating = "Great Deal";
 
-      // --- NEW LINK SEARCH LOGIC ---
-      // 1. the direct link if SerpApi parsed it
-      // 2. Otherwise use the standard link (which is a redirect to the store)
-      // 3. Fallback to the 'inline' link if available
-      // 4. AVOID 'product_link' unless it's the only option (that's the Google page)
       let bestLink = item.direct_link || item.link;
 
-      // If the link looks like a Google Shopping page (starts with /shopping/product), try to find a seller link
       if (!bestLink || bestLink.includes("google.com/shopping/product")) {
          if(item.inline_shopping_results && item.inline_shopping_results.length > 0) {
              bestLink = item.inline_shopping_results[0].link;
          } else {
-             // Last resort
              bestLink = item.link || item.product_link;
          }
       }
@@ -117,33 +104,14 @@ app.get('/api/search', async (req, res) => {
       };
     });
 
-    if (SearchHistory && products.length > 0) {
-        try {
-            await SearchHistory.create({
-                term: query,
-                topResult: { title: products[0].title, price: products[0].price, image: products[0].image, source: products[0].source }
-            });
-        } catch (e) { console.log("History Error"); }
-    }
-
     res.json(products);
-
   } catch (error) {
     console.error("❌ Search Error:", error.message);
     res.status(500).json({ error: "Search failed." });
   }
 });
 
-// History Route
-app.get('/api/history', async (req, res) => {
-    try {
-        if (!SearchHistory) return res.json([]);
-        const history = await SearchHistory.find().sort({ searchDate: -1 }).limit(10);
-        res.json(history);
-    } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
-const PORT = 5000;
+const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`🚀 Server started on port ${PORT}`);
 });
