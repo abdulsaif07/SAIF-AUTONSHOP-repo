@@ -1,77 +1,84 @@
-import React, { useState, useContext } from 'react';
+import React, { useState } from 'react';
+import { X, Bell } from 'lucide-react';
 import axios from 'axios';
-import { AuthContext } from '../context/AuthContext';
-import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 
-const AlertModal = ({ product, onClose }) => {
-  const { user } = useContext(AuthContext);
-  const navigate = useNavigate();
-  
-  // Set default target price 10% lower than current price
-  const suggestedPrice = Math.floor(product.raw_price * 0.9);
-  const [targetPrice, setTargetPrice] = useState(suggestedPrice);
+const AlertModal = ({ product, onClose, addToast }) => {
+  const [targetPrice, setTargetPrice] = useState(product.raw_price * 0.9); // Default 10% drop
   const [loading, setLoading] = useState(false);
-  const [success, setSuccess] = useState(false);
+  const { user } = useAuth();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!user) {
-      navigate('/login');
+      addToast("Please log in to set price alerts.");
       return;
     }
     
     setLoading(true);
     try {
+      const token = localStorage.getItem('autonshop_token');
       await axios.post('http://localhost:5000/api/alerts', {
         productTitle: product.title,
         productLink: product.link,
-        targetPrice: Number(targetPrice),
+        targetPrice: targetPrice,
         currentPrice: product.raw_price
+      }, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
       });
-      setSuccess(true);
-      setTimeout(() => {
-        onClose();
-      }, 2000);
+      addToast("Price alert set successfully!");
+      onClose();
     } catch (err) {
-      alert('Failed to set alert. Please try again.');
+      console.error(err);
+      addToast(err.response?.data?.msg || "Failed to set alert.");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   return (
-    <div className="modal-overlay fade-in" onClick={onClose}>
-      <div className="modal-content glass-panel" onClick={e => e.stopPropagation()}>
-        <button className="close-btn" onClick={onClose}>&times;</button>
-        {success ? (
-          <div className="success-message">
-            <h3>🎉 Alert Set Successfully!</h3>
-            <p>We'll email you when the price drops below ₹{targetPrice}.</p>
-            <button className="primary-btn" style={{marginTop: '20px'}} onClick={() => { onClose(); navigate('/alerts'); }}>
-              View My Alerts
-            </button>
+    <div className="modal-overlay">
+      <div className="modal-content pop-in">
+        <button className="close-btn" onClick={onClose}><X size={24}/></button>
+        <Bell size={40} color="var(--primary)" style={{marginBottom: '15px'}}/>
+        <h2>Set Price Alert</h2>
+        <p className="modal-subtitle">We'll remind you when the price drops below your target.</p>
+        
+        <form onSubmit={handleSubmit}>
+          <div className="form-group">
+            <label>Product</label>
+            <input type="text" value={product.title} disabled style={{background: 'var(--bg)', color: 'var(--gray)'}} />
           </div>
-        ) : (
-          <>
-            <h2>Set Price Alert</h2>
-            <p className="modal-subtitle">{product.title}</p>
-            <form onSubmit={handleSubmit}>
-              <div className="form-group">
-                <label>Current Price: ₹{product.raw_price}</label>
-                <input 
-                  type="number" 
-                  value={targetPrice} 
-                  onChange={(e) => setTargetPrice(e.target.value)} 
-                  placeholder="Enter target price"
-                  required 
-                />
-                <small>We suggest 10% off: ₹{suggestedPrice}</small>
-              </div>
-              <button type="submit" className="primary-btn" disabled={loading}>
-                {loading ? 'Setting Alert...' : 'Notify Me'}
-              </button>
-            </form>
-          </>
-        )}
+
+          <div className="form-group" style={{ display: 'flex', gap: '15px' }}>
+            <div style={{ flex: 1 }}>
+              <label>Current Price</label>
+              <input type="text" value={product.price} disabled style={{background: 'var(--bg)', color: 'var(--gray)'}} />
+            </div>
+            <div style={{ flex: 1 }}>
+              <label>Target Price (₹)</label>
+              <input 
+                type="number" 
+                value={targetPrice} 
+                onChange={(e) => setTargetPrice(e.target.value)} 
+                required 
+                min="1"
+              />
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label>Notification Email</label>
+            <input type="email" value={user?.email || ''} disabled style={{background: 'var(--bg)', color: 'var(--gray)'}} />
+            <small style={{ color: 'var(--gray)', fontSize: '12px' }}>Alerts will be sent directly to your registered email address.</small>
+          </div>
+
+          <button type="submit" className="primary-btn" style={{width: '100%', marginTop: '10px'}} disabled={loading}>
+            {loading ? 'Setting...' : 'Create Alert'}
+          </button>
+        </form>
       </div>
     </div>
   );

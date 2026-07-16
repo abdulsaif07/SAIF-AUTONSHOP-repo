@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Heart } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
-const ProductCard = ({ item, isSelected, onClick, onCompareToggle, isCompared }) => {
+const ProductCard = ({ item, isSelected, onClick, onCompareToggle, isCompared, addToast }) => {
+  const { user } = useAuth();
   const [isWishlist, setIsWishlist] = useState(false);
   
   const rating = useMemo(() => (Math.random() * (5 - 3.5) + 3.5).toFixed(1), []);
@@ -14,6 +16,10 @@ const ProductCard = ({ item, isSelected, onClick, onCompareToggle, isCompared })
 
   const toggleWishlist = (e) => {
     e.stopPropagation();
+    if (!user) {
+      if (addToast) addToast("Please log in to use the Wishlist feature.");
+      return;
+    }
     const saved = JSON.parse(localStorage.getItem('autonshop_wishlist')) || [];
     let updated;
     if(isWishlist) {
@@ -27,6 +33,10 @@ const ProductCard = ({ item, isSelected, onClick, onCompareToggle, isCompared })
 
   const handleCompareClick = (e) => {
     e.stopPropagation();
+    if (!user) {
+      if (addToast) addToast("Please log in to compare products.");
+      return;
+    }
     if (onCompareToggle) {
       onCompareToggle(item);
     }
@@ -59,6 +69,17 @@ const ProductCard = ({ item, isSelected, onClick, onCompareToggle, isCompared })
              title="Compare Product"
            />
          </div>
+      )}
+
+      {rating > 4.5 && (
+        <div style={{ position: 'absolute', top: '-10px', left: '15px', background: '#EF4444', color: 'white', padding: '4px 10px', borderRadius: '12px', fontSize: '11px', fontWeight: 'bold', zIndex: 10, boxShadow: '0 4px 10px rgba(239, 68, 68, 0.4)' }}>
+          🔥 HOT DEAL
+        </div>
+      )}
+      {rating < 4.0 && (
+        <div style={{ position: 'absolute', top: '-10px', left: '15px', background: 'var(--primary)', color: 'white', padding: '4px 10px', borderRadius: '12px', fontSize: '11px', fontWeight: 'bold', zIndex: 10, boxShadow: '0 4px 10px rgba(79, 70, 229, 0.4)' }}>
+          ⚡ LIMITED STOCK
+        </div>
       )}
 
       <div className="card-image" style={{ textAlign: 'center', padding: '20px' }}>

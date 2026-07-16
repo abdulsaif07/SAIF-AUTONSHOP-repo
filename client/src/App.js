@@ -3,9 +3,10 @@ import React, { useState, useEffect, useMemo, Suspense, lazy } from 'react';
 import axios from 'axios';
 import { BrowserRouter as Router, Routes, Route, useNavigate } from 'react-router-dom';
 import * as mobilenet from '@tensorflow-models/mobilenet';
+import { RefreshCw } from 'lucide-react';
 import '@tensorflow/tfjs';
 
-import { AuthProvider } from './context/AuthContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import Navbar from './components/Navbar';
 import SearchBar from './components/SearchBar';
 import ProductCard from './components/ProductCard';
@@ -17,6 +18,8 @@ import TrendingGrid from './components/TrendingGrid';
 import FeaturesSection from './components/FeaturesSection';
 import SkeletonLoader from './components/SkeletonLoader';
 import { useToast } from './components/Toast';
+import NewsletterPopup from './components/NewsletterPopup';
+import SubscriptionDashboard from './components/SubscriptionDashboard';
 
 import './App.css';
 
@@ -26,6 +29,10 @@ const CompareModal = lazy(() => import('./components/CompareModal'));
 const Login = lazy(() => import('./components/Auth/Login'));
 const Signup = lazy(() => import('./components/Auth/Signup'));
 const CategoryGrid = lazy(() => import('./components/CategoryGrid'));
+const MyAlerts = lazy(() => import('./components/MyAlerts'));
+const PrivacyPolicy = lazy(() => import('./components/StaticPages').then(module => ({ default: module.PrivacyPolicy })));
+const TermsOfService = lazy(() => import('./components/StaticPages').then(module => ({ default: module.TermsOfService })));
+const AboutUs = lazy(() => import('./components/StaticPages').then(module => ({ default: module.AboutUs })));
 
 const ALL_TRENDING_PRODUCTS = [
   { title: "iPhone 15 Pro", image: "https://m.media-amazon.com/images/I/81SigpJN1KL._AC_SL1500_.jpg", price: "₹1,34,900", tag: "Hot Tech", query: "iPhone 15 Pro" },
@@ -33,7 +40,15 @@ const ALL_TRENDING_PRODUCTS = [
   { title: "Samsung S24 Ultra", image: "https://m.media-amazon.com/images/I/81vxWpPpgNL._AC_SL1500_.jpg", price: "₹1,29,999", tag: "Android King", query: "Samsung Galaxy S24 Ultra" },
   { title: "MacBook Air M2", image: "https://m.media-amazon.com/images/I/719C6bJv8jL._AC_SL1500_.jpg", price: "₹99,900", tag: "Student Fav", query: "Apple MacBook Air M2" },
   { title: "Sony WH-1000XM5", image: "https://m.media-amazon.com/images/I/51SKmu2G9FL._AC_SL1000_.jpg", price: "₹26,990", tag: "Best Audio", query: "Sony WH-1000XM5 Headphones" },
-  { title: "Apple Watch S9", image: "https://m.media-amazon.com/images/I/71XMTLtZd5L._AC_SL1500_.jpg", price: "₹41,900", tag: "Wearable", query: "Apple Watch Series 9" }
+  { title: "Apple Watch S9", image: "https://m.media-amazon.com/images/I/71XMTLtZd5L._AC_SL1500_.jpg", price: "₹41,900", tag: "Wearable", query: "Apple Watch Series 9" },
+  { title: "iPad Air 5th Gen", image: "https://m.media-amazon.com/images/I/71VbHaX7w7L._AC_SL1500_.jpg", price: "₹59,900", tag: "Tablet", query: "Apple iPad Air 5" },
+  { title: "Nintendo Switch", image: "https://m.media-amazon.com/images/I/61-PblYntsL._AC_SL1500_.jpg", price: "₹29,990", tag: "Gaming", query: "Nintendo Switch OLED" },
+  { title: "Dell XPS 15", image: "https://m.media-amazon.com/images/I/71d1eXy8pML._AC_SL1500_.jpg", price: "₹1,85,000", tag: "Laptop", query: "Dell XPS 15" },
+  { title: "GoPro HERO12", image: "https://m.media-amazon.com/images/I/61k2N0z3gIL._AC_SL1500_.jpg", price: "₹37,990", tag: "Camera", query: "GoPro HERO12 Black" },
+  { title: "Bose QuietComfort", image: "https://m.media-amazon.com/images/I/51OEDa13BvL._AC_SL1500_.jpg", price: "₹29,900", tag: "Audio", query: "Bose QuietComfort Headphones" },
+  { title: "Dyson V15 Detect", image: "https://m.media-amazon.com/images/I/61vY4t+JlbL._AC_SL1500_.jpg", price: "₹65,900", tag: "Home", query: "Dyson V15 Vacuum" },
+  { title: "LG C3 OLED TV", image: "https://m.media-amazon.com/images/I/81Pj9x5n6xL._AC_SL1500_.jpg", price: "₹1,45,000", tag: "Smart TV", query: "LG C3 55 inch OLED" },
+  { title: "Kindle Paperwhite", image: "https://m.media-amazon.com/images/I/71KwpzB+c-L._AC_SL1000_.jpg", price: "₹13,999", tag: "Reading", query: "Kindle Paperwhite 16GB" }
 ];
 
 
@@ -66,7 +81,9 @@ function MainApp() {
   const [storeFilter, setStoreFilter] = useState("");
   const [compareItems, setCompareItems] = useState([]);
   const [showCompareModal, setShowCompareModal] = useState(false);
+  const [refreshCount, setRefreshCount] = useState(() => parseInt(localStorage.getItem('autonshop_refresh_count') || '0', 10));
   const { addToast, ToastContainer } = useToast();
+  const { user } = useAuth();
 
   const navigate = useNavigate();
 
@@ -148,12 +165,33 @@ function MainApp() {
   };
 
   const handleCompareToggle = (item) => {
+    if (!user) {
+      addToast("Please log in to compare products.");
+      return;
+    }
     setCompareItems(prev => {
       const exists = prev.find(p => p.title === item.title);
       if (exists) return prev.filter(p => p.title !== item.title);
       if (prev.length >= 2) return [prev[1], item];
       return [...prev, item];
     });
+  };
+
+  const handleRefreshDeals = () => {
+    if (!user && refreshCount >= 5) {
+      addToast("You've reached your 5 free refreshes. Please log in for unlimited deals!");
+      navigate('/login');
+      return;
+    }
+    
+    if (!user) {
+      const newCount = refreshCount + 1;
+      setRefreshCount(newCount);
+      localStorage.setItem('autonshop_refresh_count', newCount.toString());
+    }
+
+    const shuffled = [...ALL_TRENDING_PRODUCTS].sort(() => 0.5 - Math.random());
+    setDailyDeals(shuffled.slice(0, 6));
   };
 
   const filteredProducts = useMemo(() => {
@@ -185,14 +223,46 @@ function MainApp() {
           <Route path="/signup" element={<Signup />} />
           <Route path="/history" element={<History />} />
           <Route path="/wishlist" element={<Wishlist />} />
+          <Route path="/alerts" element={<MyAlerts />} />
+          <Route path="/subscription" element={<SubscriptionDashboard />} />
+          <Route path="/privacy" element={<PrivacyPolicy />} />
+          <Route path="/terms" element={<TermsOfService />} />
+          <Route path="/about" element={<AboutUs />} />
           
           <Route path="/" element={
             <>
+              <NewsletterPopup />
               <SearchBar query={query} setQuery={setQuery} onSearch={searchProducts} analyzing={analyzing} handleImageUpload={handleImageUpload} loading={loading} />
               <div className="main-content fade-in">
                 {loading ? <SkeletonLoader count={6} /> : (
                   <>
                     <DealBanner featuredDeal={featuredDeal} searchProducts={searchProducts} />
+                    
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '40px', marginBottom: '20px' }}>
+                      <h2 style={{ margin: 0 }}>Top Discounted Products</h2>
+                      <button 
+                        onClick={handleRefreshDeals} 
+                        style={{ 
+                          background: 'var(--primary)', 
+                          border: 'none', 
+                          color: '#333333', 
+                          display: 'flex', 
+                          alignItems: 'center', 
+                          gap: '8px',
+                          padding: '10px 20px',
+                          borderRadius: '30px',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          transition: 'all 0.2s ease',
+                          boxShadow: '0 4px 12px rgba(0,0,0,0.05)'
+                        }}
+                        onMouseOver={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
+                        onMouseOut={(e) => e.currentTarget.style.transform = 'translateY(0)'}
+                      >
+                        <RefreshCw size={18} /> Refresh Deals { !user && <span style={{opacity: 0.7, fontSize: '13px', marginLeft: '4px'}}>({5 - refreshCount} left)</span> }
+                      </button>
+                    </div>
+
                     <TrendingGrid dailyDeals={dailyDeals} searchProducts={searchProducts} />
                     <FeaturesSection />
                   </>
@@ -244,6 +314,7 @@ function MainApp() {
                            onClick={() => handleProductSelect(item)} 
                            onCompareToggle={handleCompareToggle}
                            isCompared={compareItems.some(p => p.title === item.title)}
+                           addToast={addToast}
                         />
                     ))
                   )}

@@ -1,16 +1,20 @@
-import React, { useState } from 'react';
-import { ExternalLink, Share2 } from 'lucide-react';
+import React, { useState, Suspense, lazy } from 'react';
+import { Share2, ShoppingBag } from 'lucide-react';
 import { useToast } from './Toast';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import { useAuth } from '../context/AuthContext';
+
+const PaymentModal = lazy(() => import('./PaymentModal'));
 
 const ProductDetail = ({ selectedProduct, getAlternativeProduct, getStoreStyle }) => {
   const [copied, setCopied] = useState(false);
+  const [notifyStatus, setNotifyStatus] = useState('idle');
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
   const { addToast, ToastContainer } = useToast();
+  const { user } = useAuth();
   const altProduct = getAlternativeProduct();
 
   if (!selectedProduct) return null;
-
-  const style = getStoreStyle(selectedProduct.source);
 
   const handleShare = () => {
     const url = window.location.origin + '/results?q=' + encodeURIComponent(selectedProduct.title);
@@ -29,6 +33,23 @@ const ProductDetail = ({ selectedProduct, getAlternativeProduct, getStoreStyle }
      return `https://www.google.com/search?tbm=shop&q=${q}`;
   };
 
+  const handleNotifyClick = () => {
+    const savedAlerts = JSON.parse(localStorage.getItem('autonshop_alerts')) || [];
+    if (!savedAlerts.find(a => a.title === selectedProduct.title)) {
+      savedAlerts.push({
+        title: selectedProduct.title,
+        image: selectedProduct.image,
+        currentPrice: selectedProduct.price,
+        source: selectedProduct.source,
+        dateAdded: new Date().toLocaleDateString()
+      });
+      localStorage.setItem('autonshop_alerts', JSON.stringify(savedAlerts));
+    }
+    setNotifyStatus('done');
+    addToast('Chill karo! You will be notified of price drops.');
+    setTimeout(() => setNotifyStatus('idle'), 3000);
+  };
+
   return (
     <div className="detail-view">
       <div className="detail-header">
@@ -42,11 +63,11 @@ const ProductDetail = ({ selectedProduct, getAlternativeProduct, getStoreStyle }
           <h1>{selectedProduct.price}</h1>
           <span className="badge fair-price-large">{selectedProduct.deal_rating}</span>
         </div>
-        <div style={{display: 'flex', gap: '10px', marginTop: '15px'}}>
-          <a href={getExternalLink()} target="_blank" rel="noreferrer" className="action-btn email" style={{textDecoration: 'none', flex: 1, display: 'flex', justifyContent: 'center'}}>
-            Buy on {selectedProduct.source} <ExternalLink size={16} />
+        <div style={{display: 'flex', gap: '10px', marginTop: '15px', flexWrap: 'wrap'}}>
+          <a href={getExternalLink()} target="_blank" rel="noreferrer" className="action-btn email" style={{textDecoration: 'none', flex: 1, minWidth: '150px', display: 'flex', justifyContent: 'center'}}>
+            Buy on {selectedProduct.source} <ShoppingBag size={16} style={{marginLeft: '6px'}} />
           </a>
-          <button className="action-btn" onClick={handleShare} style={{background: 'var(--card-bg)', border: '1px solid var(--border-color)', color: 'var(--text)', flex: 0.5}}>
+          <button className="action-btn" onClick={handleShare} style={{background: 'var(--card-bg)', border: '1px solid var(--border-color)', color: 'var(--text)', flex: 0.5, minWidth: '100px'}}>
             <Share2 size={16} style={{marginRight: '6px'}}/> {copied ? 'Copied!' : 'Share'}
           </button>
         </div>
@@ -77,14 +98,14 @@ const ProductDetail = ({ selectedProduct, getAlternativeProduct, getStoreStyle }
             <AreaChart data={selectedProduct.history}>
               <defs>
                 <linearGradient id="colorPrice" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#2563eb" stopOpacity={0.1}/>
-                  <stop offset="95%" stopColor="#2563eb" stopOpacity={0}/>
+                  <stop offset="5%" stopColor="#333333" stopOpacity={0.1}/>
+                  <stop offset="95%" stopColor="#333333" stopOpacity={0}/>
                 </linearGradient>
               </defs>
               <XAxis dataKey="day" hide />
               <YAxis hide domain={['auto', 'auto']} />
               <Tooltip />
-              <Area type="monotone" dataKey="price" stroke="#2563eb" strokeWidth={3} fill="url(#colorPrice)" />
+              <Area type="monotone" dataKey="price" stroke="#333333" strokeWidth={3} fill="url(#colorPrice)" />
             </AreaChart>
           </ResponsiveContainer>
         </div>
@@ -107,7 +128,7 @@ const ProductDetail = ({ selectedProduct, getAlternativeProduct, getStoreStyle }
           <div className="price-action">
             <span className="price-bold">{selectedProduct.price}</span>
             <a href={selectedProduct.link} target="_blank" rel="noreferrer" className="buy-btn-small">
-              Buy <ExternalLink size={12}/>
+              Buy <ShoppingBag size={14}/>
             </a>
           </div>
         </div>
@@ -135,7 +156,31 @@ const ProductDetail = ({ selectedProduct, getAlternativeProduct, getStoreStyle }
           </div>
         )}
       </div>
+      
+      <div className="price-alert-box" style={{marginTop: '30px', padding: '20px', background: 'var(--card-bg)', borderRadius: '16px', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '10px'}}>
+        <h3 style={{margin: 0, fontSize: '16px', color: 'var(--text)'}}>🔔 Get Price Drop Alerts</h3>
+        <p style={{margin: 0, fontSize: '13px', color: 'var(--gray)'}}>Enter your email to get notified when this product hits its lowest price.</p>
+        <div style={{display: 'flex', gap: '10px', marginTop: '5px'}}>
+          <input type="email" placeholder="Your Email Address" defaultValue={user ? user.email : ''} style={{flex: 1, padding: '10px 15px', borderRadius: '10px', border: '1px solid var(--border-color)', background: 'var(--input-bg)', color: 'var(--text)', outline: 'none', fontFamily: 'Outfit'}} />
+          <button 
+            className="primary-btn" 
+            onClick={handleNotifyClick} 
+            style={{padding: '10px 20px', margin: 0, borderRadius: '10px', fontSize: '14px', background: notifyStatus === 'done' ? '#10B981' : 'var(--primary)', color: notifyStatus === 'done' ? 'white' : '#333333'}}
+          >
+            {notifyStatus === 'done' ? 'Chill karo! ✌️' : 'Notify Me'}
+          </button>
+        </div>
+      </div>
+
       <ToastContainer />
+      {showPaymentModal && (
+        <Suspense fallback={null}>
+          <PaymentModal 
+            onClose={() => setShowPaymentModal(false)} 
+            onSuccess={() => setShowPaymentModal(false)} 
+          />
+        </Suspense>
+      )}
     </div>
   );
 };

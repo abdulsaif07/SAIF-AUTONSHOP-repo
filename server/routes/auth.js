@@ -22,7 +22,7 @@ router.post('/register', async (req, res) => {
     const payload = { user: { id: user.id } };
     jwt.sign(payload, process.env.JWT_SECRET || 'super_secret_jwt_key_123', { expiresIn: '7d' }, (err, token) => {
       if (err) throw err;
-      res.json({ token, user: { id: user.id, name: user.name, email: user.email } });
+      res.json({ token, user: { id: user.id, name: user.name, email: user.email, isPremium: user.isPremium } });
     });
   } catch (err) {
     console.error(err.message);
@@ -44,7 +44,7 @@ router.post('/login', async (req, res) => {
     const payload = { user: { id: user.id } };
     jwt.sign(payload, process.env.JWT_SECRET || 'super_secret_jwt_key_123', { expiresIn: '7d' }, (err, token) => {
       if (err) throw err;
-      res.json({ token, user: { id: user.id, name: user.name, email: user.email } });
+      res.json({ token, user: { id: user.id, name: user.name, email: user.email, isPremium: user.isPremium } });
     });
   } catch (err) {
     console.error(err.message);
@@ -57,6 +57,40 @@ router.post('/login', async (req, res) => {
 router.get('/me', auth, async (req, res) => {
   try {
     const user = await User.findById(req.user.id).select('-password');
+    res.json(user);
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).send('Server error');
+  }
+});
+
+// @route   POST /api/auth/subscribe
+// @desc    Upgrade user to premium
+router.post('/subscribe', auth, async (req, res) => {
+  try {
+    let user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ msg: 'User not found' });
+    
+    user.isPremium = true;
+    await user.save();
+    
+    res.json(user);
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).send('Server error');
+  }
+});
+
+// @route   POST /api/auth/unsubscribe
+// @desc    Downgrade user to standard
+router.post('/unsubscribe', auth, async (req, res) => {
+  try {
+    let user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ msg: 'User not found' });
+    
+    user.isPremium = false;
+    await user.save();
+    
     res.json(user);
   } catch (err) {
     console.error(err.message);

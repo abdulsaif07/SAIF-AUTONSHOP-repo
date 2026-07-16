@@ -48,21 +48,47 @@ const generateHistory = (currentPrice) => {
 };
 
 // --- SMART LINK CLEANER ---
-function extractProductFromUrl(input) {
+async function extractProductFromUrl(input) {
     if (!input.includes('http') && !input.includes('www.')) return input;
     try {
-        const url = new URL(input.startsWith('http') ? input : `https://${input}`);
-        const path = url.pathname;
+        let urlStr = input.startsWith('http') ? input : `https://${input}`;
+        
+        // Follow shortlinks
+        if (urlStr.includes('amzn.in') || urlStr.includes('/d/') || urlStr.includes('/s/')) {
+            try {
+                const response = await axios.head(urlStr, { maxRedirects: 5, timeout: 3000 });
+                if (response.request && response.request.res && response.request.res.responseUrl) {
+                    urlStr = response.request.res.responseUrl;
+                }
+            } catch(e) {
+                // Ignore timeout or network errors, proceed with original
+            }
+        }
+
+        const url = new URL(urlStr);
+        const segments = url.pathname.split('/').filter(Boolean);
+        
         if (url.hostname.includes('amazon')) {
-            const segments = path.split('/');
             const dpIndex = segments.indexOf('dp');
             if (dpIndex > 0) return segments[dpIndex - 1].replace(/-/g, ' ');
+            if (dpIndex === 0 && segments.length > 1) return segments[1]; // Return ASIN
         }
+        
         if (url.hostname.includes('flipkart')) {
-            const segments = path.split('/');
-            if (segments.length > 1) return segments[1].replace(/-/g, ' ');
+            if (segments.length > 0 && segments[0].length > 5) {
+                return segments[0].replace(/-/g, ' ');
+            }
         }
-        return input;
+        
+        if (url.hostname.includes('myntra')) {
+            if (segments.length >= 3) return segments[2].replace(/-/g, ' ');
+        }
+        
+        // Generic fallback: Try to find a long slug with hyphens
+        const slug = segments.find(s => s.includes('-') && s.length > 10);
+        if (slug) return slug.replace(/-/g, ' ');
+        
+        return input; // Fallback if no recognizable pattern
     } catch (e) { return input; }
 }
 
@@ -72,7 +98,7 @@ app.get('/api/search', async (req, res) => {
     let query = req.query.q;
     if (!query) return res.status(400).json({ error: "Missing query parameter 'q'" });
 
-    query = extractProductFromUrl(query);
+    query = await extractProductFromUrl(query);
 
     const cachedData = getFromCache(query.toLowerCase());
     if (cachedData) {

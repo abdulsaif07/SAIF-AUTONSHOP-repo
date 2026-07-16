@@ -42,8 +42,18 @@ export const AuthProvider = ({ children }) => {
     setToken(null);
   };
 
+  const subscribeUser = async () => {
+    const res = await axios.post('http://localhost:5000/api/auth/subscribe');
+    setUser(res.data);
+  };
+
+  const unsubscribeUser = async () => {
+    const res = await axios.post('http://localhost:5000/api/auth/unsubscribe');
+    setUser(res.data);
+  };
+
   return (
-    <AuthContext.Provider value={{ user, token, login, register, logout }}>
+    <AuthContext.Provider value={{ user, token, login, register, logout, subscribeUser, unsubscribeUser }}>
       {children}
     </AuthContext.Provider>
   );

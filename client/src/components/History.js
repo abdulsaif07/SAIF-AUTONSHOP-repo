@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { History as HistoryIcon, Trash2 } from 'lucide-react';
+import { History as HistoryIcon, Trash2, Lock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 
 const History = () => {
   const [history, setHistory] = useState([]);
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   useEffect(() => {
     const saved = JSON.parse(localStorage.getItem('autonshop_history')) || [];
@@ -18,7 +20,16 @@ const History = () => {
 
   return (
     <div className="main-content fade-in" style={{ minHeight: '60vh' }}>
-      <div className="section-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      {!user ? (
+        <div className="placeholder" style={{ marginTop: '80px' }}>
+          <Lock size={48} color="var(--gray)" style={{marginBottom: '20px'}}/>
+          <h2>Login Required</h2>
+          <p>Please log in to view your recently checked products.</p>
+          <button className="primary-btn" onClick={() => navigate('/login')} style={{marginTop: '20px'}}>Log In Now</button>
+        </div>
+      ) : (
+        <>
+          <div className="section-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div style={{ textAlign: 'left' }}>
           <h2><HistoryIcon size={28} style={{ marginRight: '10px', verticalAlign: 'middle' }} /> Recently Viewed</h2>
           <p>Products you checked out recently</p>
@@ -48,6 +59,8 @@ const History = () => {
             </div>
           ))}
         </div>
+      )}
+      </>
       )}
     </div>
   );
